@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.5)
-project(compute)
+project(mndb)
 
 set(COMPUTE_VERSION_MAJOR 1)
 set(COMPUTE_VERSION_MINOR 0)
@@ -10,13 +10,13 @@ find_package(Boost REQUIRED COMPONENTS unit_test_framework system)
 find_package(Threads)
 
 include_directories("${PROJECT_SOURCE_DIR}/include")
-set(COMPUTE_SOURCES ${PROJECT_SOURCE_DIR}/src/main.cpp)
+set(MNDB_SOURCES ${PROJECT_SOURCE_DIR}/src/main.cpp)
 
-add_executable(compute ${COMPUTE_SOURCES})
-target_include_directories(compute PRIVATE 
+add_executable(mndb-server ${MNDB_SOURCES})
+target_include_directories(mndb-server PRIVATE
     "${PROJECT_SOURCE_DIR}/include"
     ${Boost_INCLUDE_DIRS})
-target_link_libraries(compute
+target_link_libraries(mndb-server
     ${Boost_LIBRARIES}
     ${CMAKE_THREAD_LIBS_INIT}
     )
