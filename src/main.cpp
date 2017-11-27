@@ -229,7 +229,7 @@ public:
       asio::write(socket_, asio::buffer(&reply, sizeof(reply)));
     
       std::cout << "Write handled successfully" << std::endl;
-
+      
       //TODO: We're duplicating what we're doing in write_response()
       outbox_.pop_front();
       if (outbox_.size() > 0)
@@ -252,7 +252,7 @@ public:
     }
     else
     {
-      // Nobody is writing any day right now so we can start one
+      // There is no write in progressright now so we can start one
       io_service_->post(socket_strand_.wrap(boost::bind(&tcp_connection::write_response, shared_from_this())));
     }
   }
@@ -317,32 +317,31 @@ public:
   tcp_server(std::shared_ptr<asio::io_service> io_service) 
     : io_service_(io_service)
     , acceptor_(*io_service, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), nbd_port))
-    {
-        acceptor_.listen(asio::socket_base::max_connections); // TODO: I don't know if this is required. It's not in the example
-        start_accept();
-    }
+  {
+    acceptor_.listen(asio::socket_base::max_connections); // TODO: I don't know if this is required. It's not in the example
+    start_accept();
+  }
 
 private:
-    void start_accept()
-    {
-      //tcp_connection::pointer new_connection = tcp_connection::create(acceptor_.get_io_service());
-      tcp_connection::pointer new_connection = tcp_connection::create(io_service_);
+  void start_accept()
+  {
+    tcp_connection::pointer new_connection = tcp_connection::create(io_service_);
     
-      acceptor_.async_accept(new_connection->socket(), 
-			     boost::bind(&tcp_server::handle_accept, this, new_connection, asio::placeholders::error));
-    }
+    acceptor_.async_accept(new_connection->socket(), 
+			   boost::bind(&tcp_server::handle_accept, this, new_connection, asio::placeholders::error));
+  }
 
-    void handle_accept(tcp_connection::pointer new_connection, const boost::system::error_code& error)
-    {
-        if (!error)
-        {
-            new_connection->start();
-        }
-        start_accept();
-    }
-
+  void handle_accept(tcp_connection::pointer new_connection, const boost::system::error_code& error)
+  {
+    if (!error)
+      {
+	new_connection->start();
+      }
+    start_accept();
+  }
+  
   std::shared_ptr<asio::io_service> io_service_;
-    asio::ip::tcp::acceptor acceptor_;
+  asio::ip::tcp::acceptor acceptor_;
 };
 
 int main(int argc, char** argv)
