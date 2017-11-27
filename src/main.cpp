@@ -1,6 +1,7 @@
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 #include <boost/endian/conversion.hpp>
+#include <boost/filesystem.hpp>
 
 #include <iostream>
 #include <array>
@@ -260,14 +261,30 @@ public:
   void read_data_from_backing(std::shared_ptr<command> c)
   {
     // TODO: Real file IO
-    memcpy(c->buffer.data(), device_ + c->offset, c->length);
+    //memcpy(c->buffer.data(), device_ + c->offset, c->length);
+    off_t off = lseek(backing_file_, c->offset, SEEK_SET);
+    if (off == -1)
+    {
+      throw std::runtime_error("Failed to seek to the given offset");
+    }
+    ssize_t res = read(backing_file_, c->buffer.data(), c->length);
+    // TODO: Check the res and do reads in a loop.
+    
     io_service_->post(socket_strand_.wrap(boost::bind(&tcp_connection::finish_request, shared_from_this(), c)));
   }
 
   void write_data_to_backing(std::shared_ptr<command> c)
   {
     // TODO: As before, we need this to be real file io
-    memcpy(device_ + c->offset, c->buffer.data(), c->length);
+    // memcpy(device_ + c->offset, c->buffer.data(), c->length);
+
+    ssize_t off = lseek(backing_file_, c->offset, SEEK_SET);
+    if (off == -1)
+    {
+      throw std::runtime_error("Failed to seek to the given offset");	
+    }
+    ssize_t res = write(backing_file_, c->buffer.data(), c->length);
+
     io_service_->post(socket_strand_.wrap(boost::bind(&tcp_connection::finish_request, shared_from_this(), c)));
 
   }
@@ -285,6 +302,8 @@ private:
     {
       throw std::runtime_error("Unable to open the backing file");
     }
+
+    disk_size_ = boost::filesystem::file_size(backing_file_path_);
   }
 
   std::shared_ptr<asio::io_service> io_service_;
@@ -298,8 +317,9 @@ private:
   char data_[1024];
     
   // TODO: Replace this with actual file IO
-  static const uint64_t disk_size_ = 1024*1024*1024;
-  char device_[disk_size_];
+  //static const uint64_t disk_size_ = 1024*1024*1024;
+  //char device_[disk_size_];
+  uint64_t disk_size_;
 
   // TODO: We need to put this on the command-line
   const char* backing_file_path_ = "/home/matthew/backing.img";

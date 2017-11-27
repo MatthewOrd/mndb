@@ -6,7 +6,7 @@ set(COMPUTE_VERSION_MINOR 0)
 
 #enable_testing()
 
-find_package(Boost REQUIRED COMPONENTS unit_test_framework system)
+find_package(Boost REQUIRED COMPONENTS unit_test_framework system filesystem)
 find_package(Threads)
 
 include_directories("${PROJECT_SOURCE_DIR}/include")
