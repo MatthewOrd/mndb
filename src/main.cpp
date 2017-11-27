@@ -260,31 +260,43 @@ public:
   
   void read_data_from_backing(std::shared_ptr<command> c)
   {
-    // TODO: Real file IO
-    //memcpy(c->buffer.data(), device_ + c->offset, c->length);
     off_t off = lseek(backing_file_, c->offset, SEEK_SET);
     if (off == -1)
     {
       throw std::runtime_error("Failed to seek to the given offset");
     }
-    ssize_t res = read(backing_file_, c->buffer.data(), c->length);
-    // TODO: Check the res and do reads in a loop.
+    size_t remaining = c->length;
+    while (remaining > 0)
+    {
+      ssize_t res = read(backing_file_, c->buffer.data() + (c->length - remaining), remaining);
+      if (res == -1)
+      {
+	throw std::runtime_error("Read failed");
+      }
+      remaining -= res;
+    }
     
     io_service_->post(socket_strand_.wrap(boost::bind(&tcp_connection::finish_request, shared_from_this(), c)));
   }
 
   void write_data_to_backing(std::shared_ptr<command> c)
   {
-    // TODO: As before, we need this to be real file io
-    // memcpy(device_ + c->offset, c->buffer.data(), c->length);
-
     ssize_t off = lseek(backing_file_, c->offset, SEEK_SET);
     if (off == -1)
     {
       throw std::runtime_error("Failed to seek to the given offset");	
     }
-    ssize_t res = write(backing_file_, c->buffer.data(), c->length);
-
+    size_t remaining = c->length;
+    while (remaining > 0)
+    {
+      ssize_t res = write(backing_file_, c->buffer.data() + (c->length - remaining), c->length);
+      if (res == -1)
+      {
+	throw std::runtime_error("Write failed");
+      }
+      remaining -= res;
+    }
+    
     io_service_->post(socket_strand_.wrap(boost::bind(&tcp_connection::finish_request, shared_from_this(), c)));
 
   }
