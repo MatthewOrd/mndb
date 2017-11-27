@@ -260,7 +260,28 @@ public:
   void read_data_from_backing(std::shared_ptr<command> c)
   {
     // TODO: Real file IO
-    memcpy(c->buffer.data(), device_ + c->offset, c->length);
+    
+    //memcpy(c->buffer.data(), device_ + c->offset, c->length);
+    off_t seek_res = lseek(backing_file_, c->offset, SEEK_SET);
+    if (seek_res < 0)
+    {
+      std::cout << "Error: Seek failed." << std::endl; 
+    }
+
+    size_t remaining = c->length;
+    
+    ssize_t res;
+    while (remaining > 0)
+    {
+      res = read(backing_file_, c->buffer.data() + (c->length - remaining) , remaining);
+      if (res < 0)
+	{
+	  std::cout << "Error: Read failed" << std::endl;
+	}
+      remaining -= res;
+    }
+    
+    
     io_service_->post(socket_strand_.wrap(boost::bind(&tcp_connection::finish_request, shared_from_this(), c)));
   }
 
