@@ -10,7 +10,12 @@ find_package(Boost REQUIRED COMPONENTS unit_test_framework system filesystem)
 find_package(Threads)
 
 include_directories("${PROJECT_SOURCE_DIR}/include")
-set(MNDB_SOURCES ${PROJECT_SOURCE_DIR}/src/main.cpp)
+set(MNDB_SOURCES 
+    ${PROJECT_SOURCE_DIR}/src/main.cpp
+    ${PROJECT_SOURCE_DIR}/src/connection_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/connection.cpp
+    ${PROJECT_SOURCE_DIR}/src/nbd.cpp
+    )
 
 add_executable(mndb-server ${MNDB_SOURCES})
 target_include_directories(mndb-server PRIVATE
