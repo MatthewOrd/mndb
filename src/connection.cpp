@@ -98,7 +98,7 @@ void tcp_connection::start()
 
         asio::write(socket_, asio::buffer(data_, bytes_copied), error);
         
-        io_service_->post(socket_strand_.wrap(boost::bind(&tcp_connection::begin_request_read, shared_from_this())));
+        io_service_->post(socket_strand_.wrap(boost::bind(&tcp_connection::read_request, shared_from_this())));
     }
     else
     {
@@ -106,65 +106,60 @@ void tcp_connection::start()
     }
 }
 
-void tcp_connection::begin_request_read()
+void tcp_connection::read_request()
 {
     //std::cout << "Beginning an asynchronous command read" << std::endl;
 
-    asio::async_read(socket_, asio::buffer(data_, sizeof(request_message)), 
-        socket_strand_.wrap(boost::bind(&tcp_connection::handle_request, shared_from_this(),
-            asio::placeholders::error, 
-            asio::placeholders::bytes_transferred)));
-}
+    auto self(shared_from_this()); // Do we need this?
+    asio::async_read(socket_, boost::asio::buffer(data_, sizeof(request_message)), 
+       socket_strand_.wrap([this, self](boost::system::error_code ec, size_t bytes_transferred)
+       {
+            request_message* request = (request_message* ) data_;
+            uint32_t magic = boost::endian::big_to_native(request->nbd_request_magic);
+    
+            if (magic == NBD_REQUEST_MAGIC)
+            {
+                auto c = std::make_shared<command>();
+                commands_.insert(c);
+                
+                c->type = boost::endian::big_to_native(request->type);
+                c->handle = request->handle;
+                c->offset = boost::endian::big_to_native(request->offset);
+                c->length = boost::endian::big_to_native(request->length);
+                c->buffer = std::vector<char>(c->length);
+            
+                std::cout << "Request type " << c->type << " ("  << c->offset << "," << c->length << ")" << std::endl;   
+            
+                if (c->type == NBD_CMD_READ)
+                {
+                    io_service_->post(file_io_strand_.wrap(boost::bind(&tcp_connection::read_data_from_backing, shared_from_this(), c)));
+                    read_request();    
+                }
+                else if (c->type == NBD_CMD_WRITE)
+                {
+                    asio::async_read(socket_, asio::buffer(c->buffer.data(), c->length),
+                        socket_strand_.wrap(boost::bind(&tcp_connection::on_read_data_for_write_request, shared_from_this(), c,
+                            asio::placeholders::error,
+                            asio::placeholders::bytes_transferred)));
+                }
+                else if (c->type == NBD_CMD_DISC)
+                {
+                    // Disconnect request. 
+                    // The server must handle all outstanding requests, shut down the TLS 
+                    // session, and close the TCP session. There is no reply to an NBD_CMD_DISC. 
 
-void tcp_connection::handle_request(const boost::system::error_code& error, size_t bytes_transferred)
-{   
-    request_message* request = (request_message* ) data_;
-    uint32_t magic = boost::endian::big_to_native(request->nbd_request_magic);
-    
-    if (magic == NBD_REQUEST_MAGIC)
-    {
-        auto c = std::make_shared<command>();
-        commands_.insert(c);
-        
-        c->type = boost::endian::big_to_native(request->type);
-        c->handle = request->handle;
-        c->offset = boost::endian::big_to_native(request->offset);
-        c->length = boost::endian::big_to_native(request->length);
-        c->buffer = std::vector<char>(c->length);
-    
-        std::cout << "Request type " << c->type << " ("  << c->offset << "," << c->length << ")" << std::endl;   
-    
-        if (c->type == NBD_CMD_READ)
-        {
-            io_service_->post(file_io_strand_.wrap(boost::bind(&tcp_connection::read_data_from_backing, shared_from_this(), c)));
-            begin_request_read();    
-        }
-        else if (c->type == NBD_CMD_WRITE)
-        {
-            asio::async_read(socket_, asio::buffer(c->buffer.data(), c->length),
-                socket_strand_.wrap(boost::bind(&tcp_connection::on_read_data_for_write_request, shared_from_this(), c,
-                    asio::placeholders::error,
-                    asio::placeholders::bytes_transferred)));
-        }
-        else if (c->type == NBD_CMD_DISC)
-        {
-            // Disconnect request. 
-            // The server must handle all outstanding requests, shut down 
-            // the TLS session, and close the TCP session. 
-            // There is no reply to an NBD_CMD_DISC. 
-
-            // We won't start a new read since the client can't send anymore requests,
-            // but we do need to handle any outstanding write requests, I think.
-            io_service_->post(file_io_strand_.wrap(boost::bind(&tcp_connection::handle_disconnect_request, shared_from_this(), c)));
-        }
-    }
-    else
-    {
-        std::cout << "Unexpected request. Terminating the connection." << std::endl; // << bytes_transferred << " bytes" << std::endl;
-        socket_.close();
-        connection_manager_.stop(shared_from_this());
-        
-    }
+                    // We won't start a new read since the client can't send anymore requests,
+                    // but we do need to handle any outstanding write requests, I think.
+                    io_service_->post(file_io_strand_.wrap(boost::bind(&tcp_connection::handle_disconnect_request, shared_from_this(), c)));
+                }
+            }
+            else
+            {
+                std::cout << "Unexpected request. Terminating the connection." << std::endl; // << bytes_transferred << " bytes" << std::endl;
+                socket_.close();
+                connection_manager_.stop(shared_from_this());
+            }
+       }));
 }
 
 void tcp_connection::on_read_data_for_write_request(std::shared_ptr<command> c, const boost::system::error_code& error, size_t bytes_transferred)
@@ -172,7 +167,7 @@ void tcp_connection::on_read_data_for_write_request(std::shared_ptr<command> c, 
     std::cout << "Received " << bytes_transferred << " bytes of data for the write request." << std::endl;
     io_service_->post(file_io_strand_.wrap(boost::bind(&tcp_connection::write_data_to_backing, shared_from_this(), c)));
 
-    begin_request_read();
+    read_request();
 }
 
 

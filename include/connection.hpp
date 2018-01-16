@@ -47,9 +47,7 @@ public:
 
     void start();
 
-    void begin_request_read();
-  
-    void handle_request(const boost::system::error_code& error, size_t bytes_transferred);
+    void read_request();
     
     void on_read_data_for_write_request(std::shared_ptr<command> c, const boost::system::error_code& error, size_t bytes_transferred);
 
